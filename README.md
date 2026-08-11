@@ -51,5 +51,26 @@ cd frontend && pnpm test && pnpm typecheck && pnpm lint
 
 ## Status
 
-Scaffold only — no domain logic yet. Models, endpoints and UI are still
-to be built.
+Working end to end. `migrate` seeds ten 6-well plates with partial history,
+the API serves them, and the microplate view renders any plate size.
+
+### Where the interesting bits live
+
+| Concern | File |
+| --- | --- |
+| Latest-reading resolution (two stacked windows) | `backend/plates/api.py` |
+| Demo data | `backend/plates/migrations/0002_seed_demo_plates.py` |
+| Confluency bands (single source of truth) | `frontend/src/lib/confluency.ts` |
+| Well labels, A1 → BC42 | `frontend/src/lib/wellLabel.ts` |
+| Hand-written API types | `frontend/src/api/types.ts` |
+
+### Notes
+
+Well labels are derived from `row_index`/`col_index` in the frontend and
+never stored, and the grid is sized from `row_count`/`col_count`, so a
+96-well plate is a row in the database rather than a code change.
+
+Band colours are a validated palette: the four hues clear colourblind and
+normal-vision separation in both light and dark. Colour is never the only
+signal — every well carries its number, its band name and a distinct glyph,
+and a never-measured well is hatched and dashed rather than merely grey.
