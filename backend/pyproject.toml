@@ -26,3 +26,8 @@ extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "DJ", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# RUF012 wants ClassVar annotations on mutable class attributes, but Django's
+# Meta options (ordering, constraints, indexes) are lists by documented design.
+"**/models.py" = ["RUF012"]
