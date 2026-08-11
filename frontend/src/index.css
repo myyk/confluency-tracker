@@ -1,10 +1,17 @@
 /*
- * Band colours are a validated palette, not a taste call. The four hues clear
- * the colourblind-separation and normal-vision gates as an all-pairs set in
- * both modes (worst CVD ΔE 10.2 light / 16.7 dark; worst normal-vision ΔE
- * 16.9 / 17.8). Two light steps sit below 3:1 against the surface, whose
- * required relief is visible labels — every well carries its number and band
- * name, so the colour never has to be read on its own.
+ * Band colours are a validated palette, not a taste call. All-pairs separation
+ * at full strength: worst CVD ΔE 9.9 light / 10.0 dark, worst normal-vision
+ * ΔE 16.9 / 20.8 — every gate clear in both modes. Two light steps sit below
+ * 3:1 against the surface, whose required relief is visible labels; every
+ * well carries its number and band name, so colour is never read alone.
+ *
+ * The hues are deliberately spread across the wheel rather than stepped along
+ * one. An earlier version used two blues for `growing` and `optimal`, which
+ * measured fine at full strength and was still unreadable on screen: the fill
+ * renders at `--band-wash`, and washing two blues to 14% put them 4.2 ΔE
+ * apart. A pale tint cannot carry a categorical distinction — the wash has to
+ * exceed ~80% before any palette separates, which is far too loud for a grid.
+ * So the tint only groups; the full-strength accent bar and glyph identify.
  *
  * Dark is stepped for the dark surface rather than flipped from light.
  */
@@ -21,14 +28,20 @@
   --border-ring: rgb(11 11 11 / 10%);
 
   --band-very-low: #c98500;
-  --band-growing: #7db3f2;
-  --band-optimal: #2a78d6;
+  --band-growing: #4a3aa7;
+  --band-optimal: #1baf7a;
   --band-over-confluent: #d03b3b;
   --band-no-data: #898781;
 
-  /* How much of the band hue washes into a well's fill. */
-  --band-wash: 14%;
-  --band-wash-strong: 22%;
+  /* How much of the band hue washes into a fill. Groups; does not identify. */
+  --band-wash: 45%;
+
+  /*
+   * Ink for text sitting on a band fill. Derived from the primary ink rather
+   * than a fixed grey: a fixed grey is picked against the page surface, and
+   * on a saturated fill it drops to 1.6:1. Measured worst case 4.9:1 light.
+   */
+  --ink-soft: color-mix(in srgb, var(--text-primary) 80%, transparent);
 
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
@@ -44,14 +57,16 @@
     --hairline: #2c2c2a;
     --border-ring: rgb(255 255 255 / 10%);
 
-    --band-very-low: #fab219;
-    --band-growing: #8fbdf5;
-    --band-optimal: #3987e5;
+    --band-very-low: #eda100;
+    --band-growing: #9085e9;
+    --band-optimal: #22c48a;
     --band-over-confluent: #e34948;
     --band-no-data: #898781;
 
-    --band-wash: 20%;
-    --band-wash-strong: 30%;
+    --band-wash: 48%;
+
+    /* Dark needs a touch more to clear 4.5:1 on its deeper fills. */
+    --ink-soft: color-mix(in srgb, var(--text-primary) 88%, transparent);
   }
 }
 
@@ -64,14 +79,15 @@
   --hairline: #2c2c2a;
   --border-ring: rgb(255 255 255 / 10%);
 
-  --band-very-low: #fab219;
-  --band-growing: #8fbdf5;
-  --band-optimal: #3987e5;
+  --band-very-low: #eda100;
+  --band-growing: #9085e9;
+  --band-optimal: #22c48a;
   --band-over-confluent: #e34948;
   --band-no-data: #898781;
 
-  --band-wash: 20%;
-  --band-wash-strong: 30%;
+  --band-wash: 48%;
+
+  --ink-soft: color-mix(in srgb, var(--text-primary) 88%, transparent);
 }
 
 body {
@@ -132,26 +148,25 @@ body {
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.375rem 1.25rem;
+  gap: 0.5rem;
   margin: 0 0 1.25rem;
-  padding: 0.75rem 1rem;
+  padding: 0;
   list-style: none;
-  background: var(--surface-1);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
 }
 
 .legend__item {
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
+  padding: 0.375rem 0.625rem;
   font-size: 0.8125rem;
+  border-radius: 6px;
 }
 
 .legend__swatch {
   font-size: 1rem;
   line-height: 1;
-  color: var(--band);
+  color: var(--band-ink);
 }
 
 .legend__label {
@@ -160,7 +175,7 @@ body {
 }
 
 .legend__range {
-  color: var(--text-muted);
+  color: var(--ink-soft);
 }
 
 /* ---- plate grid ---- */
@@ -186,38 +201,49 @@ body {
 
 /* ---- well ---- */
 
-.well {
-  --band: var(--band-no-data);
-
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  padding: 0.625rem 0.75rem;
-  background: color-mix(in srgb, var(--band) var(--band-wash), var(--surface-1));
-  border: 1px solid var(--border-ring);
-  border-left: 4px solid var(--band);
-  border-radius: 8px;
-  min-height: 6.25rem;
-}
-
-.well[data-band='very-low'] {
+/* The band a mark belongs to, resolved once for anything carrying data-band. */
+[data-band='very-low'] {
   --band: var(--band-very-low);
 }
-.well[data-band='growing'] {
+[data-band='growing'] {
   --band: var(--band-growing);
 }
-.well[data-band='optimal'] {
+[data-band='optimal'] {
   --band: var(--band-optimal);
 }
-.well[data-band='over-confluent'] {
+[data-band='over-confluent'] {
   --band: var(--band-over-confluent);
+}
+[data-band='no-data'] {
+  --band: var(--band-no-data);
+}
+
+/*
+ * The fill is shared between the wells and the legend keys, so a legend entry
+ * is a literal sample of the mark it explains rather than a similar-looking
+ * swatch that can drift away from it.
+ */
+.well,
+.legend__item {
+  /*
+   * The glyph cannot be the band colour: it would be that hue sitting on a
+   * wash of itself, which measured 1.7:1. Deepened toward the ink it keeps
+   * the hue and clears 4:1, and the full-strength bar carries the colour.
+   */
+  --band-ink: color-mix(in srgb, var(--band) 50%, var(--text-primary));
+
+  background: color-mix(in srgb, var(--band) var(--band-wash), var(--surface-1));
+  border: 1px solid var(--border-ring);
+  /* Full strength, and wide enough to be the thing the eye lands on. */
+  border-left: 7px solid var(--band);
 }
 
 /*
  * A never-measured well is not a low reading, so it must not read as one.
  * Hatched, dashed and unfilled: distinct in shape and texture, not just hue.
  */
-.well[data-band='no-data'] {
+.well[data-band='no-data'],
+.legend__item[data-band='no-data'] {
   background:
     repeating-linear-gradient(
       45deg,
@@ -228,11 +254,20 @@ body {
   border: 1px dashed color-mix(in srgb, var(--band-no-data) 55%, transparent);
 }
 
+.well {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 8px;
+  min-height: 6.25rem;
+}
+
 .well__label {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
 
@@ -246,11 +281,11 @@ body {
 .well__unit {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
 }
 
 .well__empty {
-  color: var(--text-muted);
+  color: var(--ink-soft);
 }
 
 .well__band {
@@ -259,19 +294,19 @@ body {
   gap: 0.3rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
 }
 
 .well__symbol {
-  font-size: 0.875rem;
+  font-size: 1.0625rem;
   line-height: 1;
-  color: var(--band);
+  color: var(--band-ink);
 }
 
 .well__time {
   margin-top: auto;
   font-size: 0.6875rem;
-  color: var(--text-muted);
+  color: var(--ink-soft);
 }
 
 .well__time[title] {
@@ -298,12 +333,14 @@ body {
  * and keep the never-measured well distinguishable by its dashed edge.
  */
 @media (forced-colors: active) {
-  .well {
+  .well,
+  .legend__item {
     border: 1px solid CanvasText;
-    border-left-width: 4px;
+    border-left-width: 7px;
   }
 
-  .well[data-band='no-data'] {
+  .well[data-band='no-data'],
+  .legend__item[data-band='no-data'] {
     border: 1px dashed CanvasText;
   }
 }
