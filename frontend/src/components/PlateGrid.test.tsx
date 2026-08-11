@@ -39,7 +39,7 @@ describe('PlateGrid — sized from the plate, not hardcoded', () => {
   it('renders a 2x3 plate as 6 wells', () => {
     render(<PlateGrid plate={plate(2, 3)} wells={wells(2, 3, [10, 30, 70, 95, 50, null])} />)
 
-    expect(screen.getAllByRole('listitem').filter((el) => el.className === 'well')).toHaveLength(6)
+    expect(screen.getAllByRole('button', { name: /^Well / })).toHaveLength(6)
   })
 
   it('renders a 96-well plate as 96 wells with the right column count', () => {
@@ -116,7 +116,8 @@ describe('PlateGrid — what a well shows', () => {
     const shuffled = [...wells(2, 3, [10, 20, 30, 40, 50, 60])].reverse()
     render(<PlateGrid plate={plate(2, 3)} wells={shuffled} />)
 
-    const last = screen.getByLabelText(/^Well B3:/)
+    // The grid seat is on the li; the button inside it is the card.
+    const last = screen.getByLabelText(/^Well B3:/).closest('li') as HTMLElement
     expect(last.style.gridRow).toBe('3')
     expect(last.style.gridColumn).toBe('4')
   })

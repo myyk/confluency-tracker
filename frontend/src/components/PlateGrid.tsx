@@ -5,6 +5,8 @@ import { WellCell } from './WellCell'
 interface PlateGridProps {
   plate: Plate
   wells: Well[]
+  selectedWellId?: number | null
+  onSelectWell?: (well: Well) => void
 }
 
 /**
@@ -12,7 +14,12 @@ interface PlateGridProps {
  * that the seeded plates happen to be 2x3. A 96-well plate is the same code
  * with different numbers.
  */
-export function PlateGrid({ plate, wells }: PlateGridProps) {
+export function PlateGrid({
+  plate,
+  wells,
+  selectedWellId = null,
+  onSelectWell = () => {},
+}: PlateGridProps) {
   const rows = Array.from({ length: plate.row_count }, (_, index) => index)
   const columns = Array.from({ length: plate.col_count }, (_, index) => index)
 
@@ -48,7 +55,12 @@ export function PlateGrid({ plate, wells }: PlateGridProps) {
       ))}
 
       {wells.map((well) => (
-        <WellCell key={well.id} well={well} />
+        <WellCell
+          key={well.id}
+          well={well}
+          selected={well.id === selectedWellId}
+          onSelect={onSelectWell}
+        />
       ))}
     </ol>
   )

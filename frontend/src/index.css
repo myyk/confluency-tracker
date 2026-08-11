@@ -254,6 +254,16 @@ body {
   border: 1px dashed color-mix(in srgb, var(--band-no-data) 55%, transparent);
 }
 
+/*
+ * The li is the grid item and carries the seat, so it must generate a box.
+ * `display: contents` here silently drops its grid-row/grid-column and lets
+ * the button auto-place into the header cells instead.
+ */
+.well-cell {
+  display: flex;
+  min-width: 0;
+}
+
 .well {
   display: flex;
   flex-direction: column;
@@ -261,6 +271,26 @@ body {
   padding: 0.625rem 0.75rem;
   border-radius: 8px;
   min-height: 6.25rem;
+
+  /* It is a button now: strip the UA chrome, keep the card. */
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.well:hover {
+  border-color: var(--band);
+}
+
+.well:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.well[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--surface-page), 0 0 0 4px var(--band);
 }
 
 .well__label {
@@ -343,4 +373,197 @@ body {
   .legend__item[data-band='no-data'] {
     border: 1px dashed CanvasText;
   }
+}
+
+/* ---- app body / side panel ---- */
+
+.app__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.app__plate {
+  flex: 1 1 32rem;
+  min-width: 0;
+}
+
+.panel {
+  flex: 0 1 24rem;
+  position: sticky;
+  top: 1.5rem;
+  padding: 1rem 1.125rem 1.25rem;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+}
+
+.panel__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.panel__title {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.panel__section + .panel__section {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.panel__heading {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* ---- measurement form ---- */
+
+.measure__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.measure__label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.measure__input {
+  width: 4.5rem;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  background: var(--surface-page);
+  border: 1px solid var(--hairline);
+  border-radius: 5px;
+}
+
+.measure__input[aria-invalid='true'] {
+  border-color: var(--band-over-confluent);
+  outline: 1px solid var(--band-over-confluent);
+}
+
+.measure__unit {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-right: 0.25rem;
+}
+
+.measure__submit,
+.measure__cancel,
+.panel__close,
+.history__edit {
+  padding: 0.3rem 0.65rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface-page);
+  border: 1px solid var(--hairline);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.measure__submit:hover:not(:disabled),
+.measure__cancel:hover:not(:disabled),
+.panel__close:hover,
+.history__edit:hover {
+  border-color: var(--text-secondary);
+}
+
+.measure__submit:disabled,
+.measure__cancel:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.measure__error {
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--band-over-confluent);
+}
+
+/* ---- history ---- */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history__row {
+  --band-ink: color-mix(in srgb, var(--band) 50%, var(--text-primary));
+
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  background: color-mix(in srgb, var(--band) var(--band-wash), var(--surface-1));
+  border: 1px solid var(--border-ring);
+  border-left: 5px solid var(--band);
+  border-radius: 6px;
+}
+
+.history__value {
+  font-size: 1rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.history__unit {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.history__band {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.history__time {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  color: var(--ink-soft);
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.history__row .measure {
+  width: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
