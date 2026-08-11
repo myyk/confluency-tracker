@@ -171,6 +171,23 @@ class TestPlateWells:
 
         assert next(w for w in body if w["id"] == well.id)["latest"]["value"] == 50
 
+    def test_correcting_the_latest_reading_changes_what_the_plate_returns(
+        self, client, plate, well
+    ):
+        now = timezone.now()
+        measure(well, 10, now - timedelta(days=1))
+        newest = measure(well, 80, now)
+
+        client.patch(
+            f"/api/measurements/{newest.id}",
+            {"value": 86},
+            content_type="application/json",
+        )
+
+        body = client.get(f"/api/plates/{plate.id}/wells").json()
+
+        assert next(w for w in body if w["id"] == well.id)["latest"]["value"] == 86
+
     def test_correcting_a_stale_reading_does_not_make_it_the_latest(
         self, client, plate, well
     ):
@@ -384,6 +401,21 @@ class TestCreateMeasurement:
         assert body["value"] == 65
         assert body["created_at"] == body["updated_at"]
         assert Measurement.objects.filter(id=body["id"]).exists()
+
+    def test_a_recorded_measurement_can_be_read_back(self, client, plate, well):
+        """The round trip: record one, then find it through both read paths."""
+        created = client.post(
+            self.url(well), {"value": 65}, content_type="application/json"
+        ).json()
+
+        history = client.get(self.url(well)).json()
+        assert [m["id"] for m in history] == [created["id"]]
+        assert history[0]["value"] == 65
+
+        wells = client.get(f"/api/plates/{plate.id}/wells").json()
+        latest = next(w for w in wells if w["id"] == well.id)["latest"]
+        assert latest["id"] == created["id"]
+        assert latest["value"] == 65
 
     def test_recorded_at_defaults_to_now(self, client, well):
         response = client.post(
