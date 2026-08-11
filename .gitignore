@@ -1,0 +1,58 @@
+# ---- Python / Django (backend/) ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# uv installs into backend/.venv; uv.lock IS committed.
+
+# Test / lint / type caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local SQLite database — recreate with `manage.py migrate`
+*.sqlite3
+*.sqlite3-journal
+
+# Collected static / uploaded media
+staticfiles/
+media/
+
+# ---- Node (frontend/) ----
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+
+# Vite's convention for machine-local override files
+*.local
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- Env ----
+.env
+.env.*
+!.env.example
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# ---- Tooling ----
+# Per-developer Claude Code permissions; shared config lives in CLAUDE.md
+.claude/settings.local.json
+.claude/settings.local.json.tmp.*

@@ -1,0 +1,7 @@
+# This repo is developed on Linux/WSL and macOS — normalise to LF so a
+# global core.autocrlf=true doesn't rewrite line endings on checkout.
+* text=auto eol=lf
+
+# Lockfiles are generated; keep them out of diffs and language stats.
+uv.lock linguist-generated=true
+pnpm-lock.yaml linguist-generated=true
