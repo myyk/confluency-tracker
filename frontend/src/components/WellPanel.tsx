@@ -32,6 +32,13 @@ export function WellPanel({ plateId, well, onClose }: WellPanelProps) {
       <section className="panel__section">
         <h3 className="panel__heading">Record a measurement</h3>
         <MeasurementForm
+          /*
+           * Reseeded whenever a new reading lands: the id changes, the form
+           * remounts, and the next reading starts from the one just taken
+           * rather than from a stale number or a blank field.
+           */
+          key={well.latest?.id ?? 'none'}
+          initialValue={well.latest?.value}
           submitLabel="Record"
           pending={create.isPending}
           fieldErrors={fieldErrorsOf(create.error)}

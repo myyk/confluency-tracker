@@ -56,7 +56,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function renderPanel() {
+function renderPanel(well: Well = WELL) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -70,10 +70,24 @@ function renderPanel() {
 
   render(
     <QueryClientProvider client={queryClient}>
-      <WellPanel plateId={PLATE_ID} well={WELL} onClose={() => {}} />
+      <WellPanel plateId={PLATE_ID} well={well} onClose={() => {}} />
     </QueryClientProvider>,
   )
   return { invalidated }
+}
+
+/** Same as renderPanel, but lets a test push a fresh `well` prop through. */
+function renderPanelForRerender(well: Well) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  const ui = (w: Well) => (
+    <QueryClientProvider client={queryClient}>
+      <WellPanel plateId={PLATE_ID} well={w} onClose={() => {}} />
+    </QueryClientProvider>
+  )
+  const view = render(ui(well))
+  return { rerender: (next: Well) => view.rerender(ui(next)) }
 }
 
 describe('WellPanel — history', () => {
@@ -174,6 +188,35 @@ describe('WellPanel — recording a measurement', () => {
 
     await screen.findByText('too big')
     expect(input).toHaveValue(101)
+  })
+
+  it("seeds the record form with the well's last reading", async () => {
+    const measured: Well = { ...WELL, latest: measurement(1, 80) }
+    renderPanel(measured)
+
+    await screen.findByText('80')
+    expect(screen.getAllByLabelText('Confluency')[0]).toHaveValue(80)
+  })
+
+  it('leaves the record form blank for a well never measured', async () => {
+    history = []
+    renderPanel()
+
+    await screen.findByText(/No measurements recorded/)
+    expect(screen.getAllByLabelText('Confluency')[0]).toHaveValue(null)
+  })
+
+  it('reseeds the record form when a new reading lands', async () => {
+    const { rerender } = renderPanelForRerender({ ...WELL, latest: measurement(1, 80) })
+    await screen.findByText('80')
+    expect(screen.getAllByLabelText('Confluency')[0]).toHaveValue(80)
+
+    // What the refetch after a write does: the well arrives with a new latest.
+    rerender({ ...WELL, latest: measurement(2, 88) })
+
+    await waitFor(() =>
+      expect(screen.getAllByLabelText('Confluency')[0]).toHaveValue(88),
+    )
   })
 
   it('clears the field after a successful record', async () => {

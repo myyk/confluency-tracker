@@ -2,6 +2,12 @@ import { useId, useState } from 'react'
 import type { FieldErrors } from '../api/errors'
 
 interface MeasurementFormProps {
+  /**
+   * Seeds the field. Confluency moves in small steps, so both forms open on
+   * a number the user can nudge: the inline edit on the reading it corrects,
+   * the record form on the well's last reading. Undefined leaves it blank,
+   * which is right only for a well that has never been measured.
+   */
   initialValue?: number
   submitLabel: string
   pending: boolean

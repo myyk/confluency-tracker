@@ -17,3 +17,9 @@ Build some start of the frontend.
 Surprised that it already chose colorblind friendly colors. I was going to tell it to do that given the prevelance.
 
 Worked through a bit of polish on the colors though as it was kind of unusably bad with two of the labeling colors being nearly the same. Also added some color to the legend, so you can easily see what's what. Improved contrast between other labels as well.
+
+Got claude to add the well measurement updating UI. It seems to be working with manual testing which confirms the backend tests visually.
+
+I had it update the default value for a smoother updating experience.
+
+Possible alternative: Move the new measurment UI right into the Plate UI.
