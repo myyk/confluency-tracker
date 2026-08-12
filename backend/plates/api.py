@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Count, F, OuterRef, Q, Subquery, Window
 from django.db.models.functions import RowNumber
 from django.shortcuts import get_object_or_404
@@ -49,8 +50,13 @@ def in_force(measurements):
     A correction is appended as a new row that carries the corrected row's
     created_at forward, so (well_id, created_at) identifies one reading
     across every correction of it, and updated_at says which version won.
-    Without this the row being corrected is still in the table and still
-    matches the filters -- it comes back next to its own replacement.
+
+    Since corrections retire the row they supersede, each partition should
+    now hold exactly one live row and this window has nothing left to
+    choose between. It stays as the backstop for the two cases where that is
+    not true: rows corrected before the retirement existed, which are still
+    on disk with no deleted_at, and any future write that appends a version
+    without retiring its predecessor.
 
     Ordering by updated_at rather than id because id only agrees with write
     order by accident; updated_at is the field the correction actually
@@ -157,16 +163,33 @@ def correct_measurement(request, measurement_id: int, payload: MeasurementIn):
     the original's created_at forward and stamps updated_at now. That shared
     created_at is what lets `in_force` recognise the two rows as one reading
     and serve only this one; the superseded row stays on disk unread.
+
+    It is also retired -- deleted_at stamped, same as a delete -- and that is
+    load-bearing rather than tidiness. Out-ranking is relative: `in_force`
+    hides the old row only while the new one is there to out-rank it. Delete
+    the correction and the row it replaced is the best remaining candidate,
+    so a reading the user deleted comes back wearing its pre-correction
+    value. Retiring it makes the whole reading, every version of it, leave
+    together.
     """
     original = get_object_or_404(Measurement, LIVE, id=measurement_id)
 
-    return Measurement.objects.create(
-        well_id=original.well_id,
-        value=payload.value,
-        recorded_at=payload.recorded_at or original.recorded_at,
-        created_at=original.created_at,
-        updated_at=timezone.now(),
-    )
+    now = timezone.now()
+    # Both writes or neither: a replacement without the retirement is the bug
+    # above, and a retirement without the replacement loses the reading.
+    with transaction.atomic():
+        replacement = Measurement.objects.create(
+            well_id=original.well_id,
+            value=payload.value,
+            recorded_at=payload.recorded_at or original.recorded_at,
+            created_at=original.created_at,
+            updated_at=now,
+        )
+        original.deleted_at = now
+        original.updated_at = now
+        original.save(update_fields=["deleted_at", "updated_at"])
+
+    return replacement
 
 
 @api.delete("/measurements/{measurement_id}", response={204: None})

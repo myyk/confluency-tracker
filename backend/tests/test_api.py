@@ -478,6 +478,20 @@ class TestCorrectMeasurement:
         assert original.value == 55
         assert well.measurements.count() == 2
 
+    def test_retires_the_row_it_supersedes(self, client, well):
+        original = measure(well, 55)
+
+        client.patch(
+            f"/api/measurements/{original.id}",
+            {"value": 72},
+            content_type="application/json",
+        )
+
+        original.refresh_from_db()
+        assert original.deleted_at is not None
+        # Retired, not rewritten: the old value stays on disk to be read back.
+        assert original.value == 55
+
     def test_keeps_created_at_and_moves_updated_at(self, client, well):
         original = measure(well, 55, created_at=timezone.now() - timedelta(days=5))
 
@@ -532,6 +546,103 @@ class TestCorrectMeasurement:
         )
 
         assert response.status_code == 404
+
+
+class TestCorrectThenDelete:
+    """Correct a reading, then delete it. The old value must not come back.
+
+    This is the one that got away. `in_force` hides a superseded row by
+    out-ranking it, and out-ranking is relative: take the winner away and the
+    row it beat is simply the best remaining candidate. So a reading that was
+    corrected 40 -> 72 and then deleted came back as 40 -- not in some
+    unreachable audit table, but in the well history and on the plate grid,
+    wearing a value the user had already replaced and then thrown away.
+
+    Nothing failed at the time. The correction tests passed, because the
+    correction was right. The delete tests passed, because the delete was
+    right. Only the pair was wrong, so the pair is what these cover.
+    """
+
+    def history(self, client, plate, well):
+        body = client.get(f"/api/plates/{plate.id}/wells/{well.id}/measurements").json()
+        return [row["value"] for row in body]
+
+    def latest(self, client, plate, well):
+        body = client.get(f"/api/plates/{plate.id}/wells").json()
+        return next(w for w in body if w["id"] == well.id)["latest"]
+
+    def correct(self, client, measurement_id, value):
+        return client.patch(
+            f"/api/measurements/{measurement_id}",
+            {"value": value},
+            content_type="application/json",
+        ).json()
+
+    def test_deleting_a_corrected_reading_does_not_resurrect_the_old_value(
+        self, client, plate, well
+    ):
+        original = measure(well, 40)
+        correction = self.correct(client, original.id, 72)
+
+        assert client.delete(f"/api/measurements/{correction['id']}").status_code == 204
+
+        assert self.history(client, plate, well) == []
+        assert self.latest(client, plate, well) is None
+
+    def test_every_version_of_the_reading_is_stamped_deleted(self, client, plate, well):
+        original = measure(well, 40)
+        correction = self.correct(client, original.id, 72)
+        client.delete(f"/api/measurements/{correction['id']}")
+
+        rows = Measurement.objects.filter(well=well)
+        assert rows.count() == 2, "both versions should still be on disk"
+        assert all(row.deleted_at is not None for row in rows)
+
+    def test_it_falls_back_to_an_earlier_reading_not_to_the_old_version(
+        self, client, plate, well
+    ):
+        """The dangerous near-miss: something is left to promote.
+
+        An empty history makes a resurrection obvious. Here the well has a
+        genuine earlier reading, so the grid shows *a* number either way --
+        and the wrong one, 40, is a plausible-looking confluency.
+        """
+        now = timezone.now()
+        measure(well, 15, now - timedelta(days=2))
+        newer = measure(well, 40, now)
+        correction = self.correct(client, newer.id, 72)
+
+        client.delete(f"/api/measurements/{correction['id']}")
+
+        assert self.history(client, plate, well) == [15]
+        assert self.latest(client, plate, well)["value"] == 15
+
+    def test_a_chain_of_corrections_leaves_together(self, client, plate, well):
+        original = measure(well, 40)
+        first = self.correct(client, original.id, 60)
+        second = self.correct(client, first["id"], 72)
+
+        client.delete(f"/api/measurements/{second['id']}")
+
+        assert self.history(client, plate, well) == []
+        live = Measurement.objects.filter(well=well, deleted_at__isnull=True)
+        assert live.count() == 0
+
+    def test_deleting_a_superseded_row_directly_is_404(self, client, well):
+        """The old row is gone as far as the API is concerned, so it cannot be
+        deleted twice, and a client holding a stale id gets told so."""
+        original = measure(well, 40)
+        self.correct(client, original.id, 72)
+
+        assert client.delete(f"/api/measurements/{original.id}").status_code == 404
+
+    def test_a_correction_still_shows_once_while_it_is_alive(self, client, plate, well):
+        """The retirement must not take the live version with it."""
+        original = measure(well, 40)
+        self.correct(client, original.id, 72)
+
+        assert self.history(client, plate, well) == [72]
+        assert self.latest(client, plate, well)["value"] == 72
 
 
 class TestDeleteMeasurement:
