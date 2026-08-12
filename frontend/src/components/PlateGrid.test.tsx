@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { Plate, Well } from '../api/types'
+import { OPTIMAL_RANGE } from '../lib/confluency'
 import { PlateGrid } from './PlateGrid'
 
 function plate(rows: number, cols: number): Plate {
@@ -120,5 +121,95 @@ describe('PlateGrid — what a well shows', () => {
     const last = screen.getByLabelText(/^Well B3:/).closest('li') as HTMLElement
     expect(last.style.gridRow).toBe('3')
     expect(last.style.gridColumn).toBe('4')
+  })
+})
+
+describe('PlateGrid — the target arc is a fixed reference on every well', () => {
+  it('draws the arc on all five bands, including the never-measured well', () => {
+    const view = render(
+      <PlateGrid plate={plate(1, 5)} wells={wells(1, 5, [5, 45, 75, 99, null])} />,
+    )
+
+    expect(view.container.querySelectorAll('.dial__target')).toHaveLength(5)
+  })
+
+  it('draws the same arc on each, so the eye can compare across a row', () => {
+    const view = render(<PlateGrid plate={plate(1, 3)} wells={wells(1, 3, [5, 75, null])} />)
+
+    const arcs = [...view.container.querySelectorAll('.dial__target')].map((arc) => [
+      arc.getAttribute('stroke-dasharray'),
+      arc.getAttribute('stroke-dashoffset'),
+    ])
+
+    expect(new Set(arcs.map(String)).size).toBe(1)
+  })
+
+  it('leaves the pie off a never-measured well, so empty is not a zero reading', () => {
+    const view = render(<PlateGrid plate={plate(1, 2)} wells={wells(1, 2, [0, null])} />)
+
+    // Both wells keep their arc and their track; only the measured one fills.
+    expect(view.container.querySelectorAll('.dial__target')).toHaveLength(2)
+    expect(view.container.querySelectorAll('.dial__track')).toHaveLength(2)
+    expect(view.container.querySelectorAll('.dial__fill')).toHaveLength(1)
+  })
+
+  it('sweeps the pie in proportion to the reading', () => {
+    const view = render(<PlateGrid plate={plate(1, 1)} wells={wells(1, 1, [25])} />)
+
+    const fill = view.container.querySelector('.dial__fill') as SVGCircleElement
+    const [drawn, total] = (fill.getAttribute('stroke-dasharray') ?? '').split(' ').map(Number)
+
+    expect(drawn / total).toBeCloseTo(0.25)
+  })
+
+  it('keeps the dial out of the accessible tree, the name already says it all', () => {
+    const view = render(<PlateGrid plate={plate(1, 1)} wells={wells(1, 1, [72])} />)
+
+    for (const svg of view.container.querySelectorAll('svg')) {
+      expect(svg).toHaveAttribute('aria-hidden', 'true')
+    }
+  })
+})
+
+describe('PlateGrid — the accessible name states the target relationship', () => {
+  // Scoped to this render's own container: a test that reads two labels would
+  // otherwise find both plates' A1 in the shared screen.
+  function labelFor(value: number | null): string {
+    const view = render(<PlateGrid plate={plate(1, 1)} wells={wells(1, 1, [value])} />)
+    const well = within(view.container).getByRole('button', { name: /^Well A1:/ })
+    return well.getAttribute('aria-label') ?? ''
+  }
+
+  it('says a reading under the range is below it', () => {
+    const label = labelFor(OPTIMAL_RANGE.min - 1)
+    expect(label).toContain(`below optimal range ${OPTIMAL_RANGE.min} to ${OPTIMAL_RANGE.max}`)
+  })
+
+  it('says a reading inside the range is within it', () => {
+    const label = labelFor(OPTIMAL_RANGE.min + 1)
+    expect(label).toContain(`within optimal range ${OPTIMAL_RANGE.min} to ${OPTIMAL_RANGE.max}`)
+  })
+
+  it('says a reading over the range is above it', () => {
+    const label = labelFor(OPTIMAL_RANGE.max + 1)
+    expect(label).toContain(`above optimal range ${OPTIMAL_RANGE.min} to ${OPTIMAL_RANGE.max}`)
+  })
+
+  it('treats the bounds themselves as within, matching the band', () => {
+    expect(labelFor(OPTIMAL_RANGE.min)).toContain('within optimal range')
+    expect(labelFor(OPTIMAL_RANGE.max)).toContain('within optimal range')
+  })
+
+  it('still names the band and the reading age alongside it', () => {
+    const label = labelFor(72)
+    expect(label).toContain('72% confluency')
+    expect(label).toContain('optimal')
+    expect(label).toContain('updated 2d ago')
+  })
+
+  it('claims no relationship for a well that was never measured', () => {
+    const label = labelFor(null)
+    expect(label).toBe('Well A1: no data, never measured')
+    expect(label).not.toContain('optimal range')
   })
 })

@@ -23,3 +23,11 @@ Got claude to add the well measurement updating UI. It seems to be working with 
 I had it update the default value for a smoother updating experience.
 
 Possible alternative: Move the new measurment UI right into the Plate UI.
+
+I finished all that in about 3h30m give or take. (I need to look at timestamps to confirm, it was close to this. TBH I got a lot of texting done while doing this.)
+
+Day 2: 4pm - I want to just review everything hit the mark. I immediately thought it did not nail "A scientist should be able to get a clear overview of cell growth within each well of a plate". I think with practice, yes, but like it's not as intuitive as it could be. It should convey that right away. I think a pi chart in addition would help. Alternatively, could be more of a cell density but I think it wouldn't be obvious what too much and too little would look like. This could be done with a pi chart.
+
+I would also want to allow them to delete a measurement. It wasn't asked for but it feels missing.
+
+Also, I want to move the recordering of a measurement into the well if it doesn't feel to busy.

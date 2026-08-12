@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { BAND_ORDER, BANDS, bandFor, bandInfoFor } from './confluency'
+import {
+  BAND_ORDER,
+  BANDS,
+  OPTIMAL_RANGE,
+  bandFor,
+  bandInfoFor,
+  rangePositionFor,
+  rangePositionPhrase,
+} from './confluency'
 
 describe('bandFor — the boundary values', () => {
   it.each([
@@ -69,5 +77,77 @@ describe('band presentation', () => {
   it('resolves a value straight to its presentation record', () => {
     expect(bandInfoFor(75).label).toBe('optimal')
     expect(bandInfoFor(null).label).toBe('no data')
+  })
+})
+
+/**
+ * These are written against OPTIMAL_RANGE rather than against 60 and 90, so
+ * they keep holding after someone edits the constant -- and start failing the
+ * moment a consumer stops deriving from it. The literal expectations above are
+ * the deliberate pin on today's values; these are the wiring check.
+ */
+describe('OPTIMAL_RANGE — everything derives from it', () => {
+  it('classifies its own bounds as optimal', () => {
+    expect(bandFor(OPTIMAL_RANGE.min)).toBe('optimal')
+    expect(bandFor(OPTIMAL_RANGE.max)).toBe('optimal')
+  })
+
+  it('classifies just outside its bounds as something else', () => {
+    expect(bandFor(OPTIMAL_RANGE.min - 1)).toBe('growing')
+    expect(bandFor(OPTIMAL_RANGE.max + 1)).toBe('over-confluent')
+  })
+
+  it('spans a real range, low bound below high', () => {
+    expect(OPTIMAL_RANGE.min).toBeLessThan(OPTIMAL_RANGE.max)
+  })
+
+  it('prints its bounds into the band descriptions', () => {
+    expect(BANDS.optimal.description).toContain(`${OPTIMAL_RANGE.min}`)
+    expect(BANDS.optimal.description).toContain(`${OPTIMAL_RANGE.max}`)
+    expect(BANDS['over-confluent'].description).toContain(`${OPTIMAL_RANGE.max}`)
+    expect(BANDS.growing.description).toContain(`${OPTIMAL_RANGE.min - 1}`)
+  })
+})
+
+describe('rangePositionFor — the passage-readiness question', () => {
+  it.each([
+    [0, 'below'],
+    [OPTIMAL_RANGE.min - 1, 'below'],
+    [OPTIMAL_RANGE.min, 'within'],
+    [OPTIMAL_RANGE.max, 'within'],
+    [OPTIMAL_RANGE.max + 1, 'above'],
+    [100, 'above'],
+  ])('%i is %s the optimal range', (value, expected) => {
+    expect(rangePositionFor(value)).toBe(expected)
+  })
+
+  it('reports a never-measured well as no data, not as below', () => {
+    expect(rangePositionFor(null)).toBe('no-data')
+    expect(rangePositionFor(undefined)).toBe('no-data')
+  })
+
+  it('agrees with the band classifier on every value 0..100', () => {
+    for (let value = 0; value <= 100; value++) {
+      const inOptimalBand = bandFor(value) === 'optimal'
+      expect(rangePositionFor(value) === 'within').toBe(inOptimalBand)
+    }
+  })
+})
+
+describe('rangePositionPhrase — the accessible relationship', () => {
+  it('names the relationship and the bounds', () => {
+    expect(rangePositionPhrase(72)).toBe(
+      `within optimal range ${OPTIMAL_RANGE.min} to ${OPTIMAL_RANGE.max}`,
+    )
+    expect(rangePositionPhrase(34)).toBe(
+      `below optimal range ${OPTIMAL_RANGE.min} to ${OPTIMAL_RANGE.max}`,
+    )
+    expect(rangePositionPhrase(95)).toBe(
+      `above optimal range ${OPTIMAL_RANGE.min} to ${OPTIMAL_RANGE.max}`,
+    )
+  })
+
+  it('has nothing to say about a well that was never measured', () => {
+    expect(rangePositionPhrase(null)).toBeNull()
   })
 })
