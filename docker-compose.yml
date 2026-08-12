@@ -1,0 +1,89 @@
+# `docker compose up` and nothing else: the database comes up, the backend
+# waits for it to be genuinely ready, migrates (which seeds), and serves; the
+# frontend waits for the backend and proxies to it by service name.
+#
+# Credentials below are development defaults, in the repo on purpose so a clean
+# clone needs no .env to start. They are not secrets and this database is not
+# reachable from outside the compose network. See the README's production
+# section for what replaces them.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-confluency}
+      POSTGRES_USER: ${POSTGRES_USER:-confluency}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-password}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready against the actual database and role, not just the port:
+      # Postgres accepts connections briefly during init, before the database
+      # this app wants exists, and the backend would migrate straight into that
+      # window.
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-confluency} -d ${POSTGRES_DB:-confluency}']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-confluency}:${POSTGRES_PASSWORD:-dev-only-password}@db:5432/${POSTGRES_DB:-confluency}
+      # Vite proxies with changeOrigin, so the Host header Django sees is the
+      # service name. Added to the list rather than replacing the check.
+      DJANGO_ALLOWED_HOSTS: backend
+      DJANGO_DEBUG: '1'
+    volumes:
+      # Source is live-mounted; the environment is at /opt/venv, out of reach
+      # of this mount, so nothing needs masking back.
+      - ./backend:/app
+    ports:
+      - '8000:8000'
+    healthcheck:
+      # urllib rather than curl: the slim image has Python and no curl, and
+      # adding one just to answer a healthcheck is a layer for nothing.
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+      # No polling switch. Hot reload works here on its own -- a bind mount
+      # backed by a Linux filesystem propagates inotify -- and where it does
+      # not, on Docker Desktop with the repo on a Windows or macOS filesystem,
+      # neither VITE_USE_POLLING nor CHOKIDAR_USEPOLLING changes anything on
+      # Vite 8. Both were measured before being left out; the README explains.
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume, and the one piece of real trickery here. The mount
+      # above would otherwise put the host's frontend/ over /app and hide the
+      # node_modules the image installed -- and on a clean clone the host has
+      # no node_modules at all, so the container would start with none. This
+      # keeps the image's copy visible at that one path. Node's resolver
+      # requires it to be inside /app, which is why the Python side could move
+      # its environment out of the way and this side cannot.
+      - /app/node_modules
+    ports:
+      - '5173:5173'
+
+volumes:
+  db-data:
