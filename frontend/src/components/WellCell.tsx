@@ -1,7 +1,8 @@
 import type { Well } from '../api/types'
-import { bandInfoFor } from '../lib/confluency'
+import { bandInfoFor, rangePositionPhrase } from '../lib/confluency'
 import { absoluteTime, relativeTime } from '../lib/relativeTime'
 import { wellLabel } from '../lib/wellLabel'
+import { WellDial } from './WellDial'
 
 interface WellCellProps {
   well: Well
@@ -30,11 +31,17 @@ export function WellCell({ well, selected, onSelect }: WellCellProps) {
         onClick={() => onSelect(well)}
         aria-label={
           reading
-            ? `Well ${label}: ${reading.value}% confluency, ${band.label}, updated ${relativeTime(reading.recorded_at)}`
+            ? // The band alone ("optimal") names the state but not the
+              // relationship, so the range is spelled out too: sighted users
+              // read it off the dial, everyone else needs it said.
+              `Well ${label}: ${reading.value}% confluency, ${band.label}, ${rangePositionPhrase(reading.value)}, updated ${relativeTime(reading.recorded_at)}`
             : `Well ${label}: no data, never measured`
         }
       >
-        <span className="well__label">{label}</span>
+        <span className="well__head">
+          <span className="well__label">{label}</span>
+          <WellDial value={reading?.value} />
+        </span>
 
         <span className="well__value">
           {reading ? (

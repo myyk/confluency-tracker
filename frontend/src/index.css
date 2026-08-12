@@ -293,6 +293,13 @@ body {
   box-shadow: 0 0 0 2px var(--surface-page), 0 0 0 4px var(--band);
 }
 
+.well__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.375rem;
+}
+
 .well__label {
   font-size: 0.75rem;
   font-weight: 700;
@@ -345,6 +352,66 @@ body {
   text-underline-offset: 2px;
 }
 
+/* ---- well dial ---- */
+
+/*
+ * Two stacked layers in one box: the reading pie, and the target arc painted
+ * over its edge. Sized here and only here -- the SVG inside is a 100x100 user
+ * space that scales to whatever this is, so changing the dial's size is one
+ * number and never a geometry edit.
+ */
+.dial {
+  position: relative;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.dial__face,
+.dial__overlay {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dial__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* The unfilled part of the pie: present enough to read as a dial face. */
+.dial__track {
+  stroke: color-mix(in srgb, var(--band) 20%, var(--surface-1));
+}
+
+.dial__fill {
+  stroke: var(--band);
+}
+
+/*
+ * A reference mark, not a highlight. Held well below the pie's weight: the
+ * question the dial answers is "how full is this well", and the range is the
+ * ruler it is read against, so the moment the ruler competes with the reading
+ * the plate stops scanning.
+ */
+/*
+ * Restraint has a floor. At the size the dial actually renders -- 40px, so the
+ * 3-unit stroke lands at just over one device-independent pixel -- a muted grey
+ * at half opacity is not subtle, it is absent: it reads as an antialiasing
+ * artifact on the pie's edge. Held at the secondary ink, which is still well
+ * under the pie's full-strength band colour and does not compete with it.
+ */
+.dial__target,
+.dial__tick {
+  stroke: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.dial__tick {
+  stroke-width: 2;
+}
+
 /* ---- notices ---- */
 
 .notice {
@@ -372,6 +439,23 @@ body {
   .well[data-band='no-data'],
   .legend__item[data-band='no-data'] {
     border: 1px dashed CanvasText;
+  }
+
+  /*
+   * `color-mix` and opacity both collapse here, so the dial would be one flat
+   * shape. Give the three rings distinct system colours instead.
+   */
+  .dial__track {
+    stroke: Canvas;
+  }
+
+  .dial__fill {
+    stroke: CanvasText;
+  }
+
+  .dial__target {
+    stroke: Highlight;
+    opacity: 1;
   }
 }
 
