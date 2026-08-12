@@ -1,9 +1,14 @@
-import { useState } from 'react'
-import { useCorrectMeasurement, useCreateMeasurement, useWellHistory } from '../api/plates'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  useCorrectMeasurement,
+  useCreateMeasurement,
+  useDeleteMeasurement,
+  useWellHistory,
+} from '../api/plates'
 import { fieldErrorsOf, formErrorFrom } from '../api/errors'
-import type { Well } from '../api/types'
+import type { Measurement, Well } from '../api/types'
 import { bandInfoFor } from '../lib/confluency'
-import { absoluteTime, relativeTime } from '../lib/relativeTime'
+import { absoluteTime, readingDate, relativeTime } from '../lib/relativeTime'
 import { wellLabel } from '../lib/wellLabel'
 import { MeasurementForm } from './MeasurementForm'
 
@@ -18,7 +23,55 @@ export function WellPanel({ plateId, well, onClose }: WellPanelProps) {
   const history = useWellHistory(plateId, well.id)
   const create = useCreateMeasurement(plateId, well.id)
   const correct = useCorrectMeasurement(plateId, well.id)
+  const remove = useDeleteMeasurement(plateId, well.id)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [confirmingId, setConfirmingId] = useState<number | null>(null)
+
+  /*
+   * Deleting a row destroys the element focus was sitting on, which would drop
+   * a keyboard user back to the top of the document. The row that takes its
+   * place gets focus instead; the list itself takes it when nothing is left.
+   * Recorded before the request goes out, applied once the refetched list has
+   * rendered -- the button to move to does not exist until then.
+   */
+  const listRef = useRef<HTMLOListElement>(null)
+  const deleteButtons = useRef(new Map<number, HTMLButtonElement | null>())
+  const focusAfterDelete = useRef<number | 'list' | null>(null)
+
+  useEffect(() => {
+    const target = focusAfterDelete.current
+    if (target === null) return
+
+    focusAfterDelete.current = null
+    if (target === 'list') listRef.current?.focus()
+    else deleteButtons.current.get(target)?.focus()
+  }, [history.data])
+
+  const focusConfirm = useCallback((node: HTMLDivElement | null) => {
+    node?.focus()
+  }, [])
+
+  function openConfirm(measurementId: number) {
+    remove.reset()
+    setEditingId(null)
+    setConfirmingId(measurementId)
+  }
+
+  async function confirmDelete(measurement: Measurement) {
+    const rows = history.data ?? []
+    const index = rows.findIndex((row) => row.id === measurement.id)
+    // The row below, or the one above when the last row goes, or the list.
+    const neighbour = rows[index + 1] ?? rows[index - 1]
+    focusAfterDelete.current = neighbour ? neighbour.id : 'list'
+
+    try {
+      await remove.mutateAsync(measurement.id)
+      setConfirmingId(null)
+    } catch {
+      // The row stays where it is with its message, so focus stays with it.
+      focusAfterDelete.current = null
+    }
+  }
 
   return (
     <aside className="panel" aria-label={`Well ${label}`}>
@@ -60,10 +113,22 @@ export function WellPanel({ plateId, well, onClose }: WellPanelProps) {
           <p className="notice">No measurements recorded for this well yet.</p>
         )}
 
-        <ol className="history">
+        <ol
+          className="history"
+          ref={listRef}
+          tabIndex={-1}
+          aria-label={`Measurement history for well ${label}`}
+        >
           {history.data?.map((measurement) => {
             const band = bandInfoFor(measurement.value)
             const isEditing = editingId === measurement.id
+            const isConfirming = confirmingId === measurement.id
+            const isDeleting = remove.isPending && remove.variables === measurement.id
+            const deleteError =
+              remove.variables === measurement.id ? formErrorFrom(remove.error) : null
+            const prompt = `Delete ${measurement.value}% from ${readingDate(
+              measurement.recorded_at,
+            )}?`
 
             return (
               <li className="history__row" key={measurement.id} data-band={band.id}>
@@ -99,20 +164,84 @@ export function WellPanel({ plateId, well, onClose }: WellPanelProps) {
                     >
                       {relativeTime(measurement.recorded_at)}
                     </time>
-                    <button
-                      type="button"
-                      className="history__edit"
-                      onClick={() => {
-                        correct.reset()
-                        setEditingId(measurement.id)
-                      }}
-                    >
-                      Edit
-                      <span className="visually-hidden">
-                        {' '}
-                        the {measurement.value}% reading
-                      </span>
-                    </button>
+                    {isConfirming ? (
+                      /*
+                       * Inline rather than window.confirm, and it names the
+                       * reading: the rows differ only by two numbers, so a
+                       * prompt that just said "are you sure?" would be asking
+                       * about a row the user can no longer point to.
+                       */
+                      <div
+                        className="confirm"
+                        role="alertdialog"
+                        aria-label={prompt}
+                        tabIndex={-1}
+                        ref={focusConfirm}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Escape' || isDeleting) return
+                          // The innermost dismissible thing answers Escape.
+                          event.stopPropagation()
+                          setConfirmingId(null)
+                        }}
+                      >
+                        <span className="confirm__prompt">{prompt}</span>
+                        <button
+                          type="button"
+                          className="confirm__delete"
+                          disabled={isDeleting}
+                          onClick={() => confirmDelete(measurement)}
+                        >
+                          {isDeleting ? 'Deleting…' : 'Delete'}
+                        </button>
+                        <button
+                          type="button"
+                          className="confirm__cancel"
+                          disabled={isDeleting}
+                          onClick={() => setConfirmingId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="history__edit"
+                          onClick={() => {
+                            correct.reset()
+                            setConfirmingId(null)
+                            setEditingId(measurement.id)
+                          }}
+                        >
+                          Edit
+                          <span className="visually-hidden">
+                            {' '}
+                            the {measurement.value}% reading
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="history__delete"
+                          ref={(node) => {
+                            if (node) deleteButtons.current.set(measurement.id, node)
+                            else deleteButtons.current.delete(measurement.id)
+                          }}
+                          aria-label={`Delete reading ${measurement.value}% recorded ${readingDate(
+                            measurement.recorded_at,
+                            'long',
+                          )}`}
+                          onClick={() => openConfirm(measurement.id)}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+
+                    {deleteError && (
+                      <p className="measure__error confirm__error" role="alert">
+                        {deleteError}
+                      </p>
+                    )}
                   </>
                 )}
               </li>

@@ -552,3 +552,59 @@ class TestDeleteMeasurement:
         client.delete(f"/api/measurements/{measurement.id}")
 
         assert client.delete(f"/api/measurements/{measurement.id}").status_code == 404
+
+
+class TestDeleteMeasurementMovesTheGrid:
+    """What the plate endpoint says after a delete.
+
+    The read path already excludes soft-deleted rows, but the grid is what the
+    user is looking at when they delete, so these go through the endpoint end
+    to end rather than asserting on `deleted_at`.
+    """
+
+    def latest_for(self, client, plate, well):
+        body = client.get(f"/api/plates/{plate.id}/wells").json()
+        return next(w for w in body if w["id"] == well.id)["latest"]
+
+    def test_deleting_the_latest_promotes_the_one_before_it(self, client, plate, well):
+        now = timezone.now()
+        older = measure(well, 40, now - timedelta(days=1))
+        newest = measure(well, 80, now)
+
+        assert client.delete(f"/api/measurements/{newest.id}").status_code == 204
+
+        latest = self.latest_for(client, plate, well)
+        assert latest["id"] == older.id
+        assert latest["value"] == 40
+
+    def test_deleting_a_non_latest_leaves_the_latest_alone(self, client, plate, well):
+        now = timezone.now()
+        older = measure(well, 40, now - timedelta(days=1))
+        newest = measure(well, 80, now)
+
+        assert client.delete(f"/api/measurements/{older.id}").status_code == 204
+
+        latest = self.latest_for(client, plate, well)
+        assert latest["id"] == newest.id
+        assert latest["value"] == 80
+
+    def test_deleting_the_only_reading_returns_the_well_to_no_data(
+        self, client, plate, well
+    ):
+        only = measure(well, 55)
+
+        assert client.delete(f"/api/measurements/{only.id}").status_code == 204
+
+        assert self.latest_for(client, plate, well) is None
+
+    def test_the_deleted_reading_leaves_the_history_too(self, client, plate, well):
+        now = timezone.now()
+        measure(well, 40, now - timedelta(days=1))
+        newest = measure(well, 80, now)
+
+        client.delete(f"/api/measurements/{newest.id}")
+
+        history = client.get(
+            f"/api/plates/{plate.id}/wells/{well.id}/measurements"
+        ).json()
+        assert [row["value"] for row in history] == [40]

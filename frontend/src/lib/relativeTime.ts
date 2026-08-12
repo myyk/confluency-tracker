@@ -22,6 +22,20 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
   return `${Math.floor(seconds / DAY)}d ago`
 }
 
+/**
+ * The reading's calendar date -- "Mar 14" short, "March 14" long.
+ *
+ * `relativeTime` is the right thing for "how stale is this?", and the wrong
+ * thing for naming one reading among several: two rows a minute apart are both
+ * "just now", and a confirm prompt has to say which row it means.
+ */
+export function readingDate(iso: string, style: 'short' | 'long' = 'short'): string {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return iso
+
+  return at.toLocaleDateString(undefined, { month: style, day: 'numeric' })
+}
+
 /** The full timestamp, for the `title` tooltip and the `datetime` attribute. */
 export function absoluteTime(iso: string): string {
   const at = new Date(iso)

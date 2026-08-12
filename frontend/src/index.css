@@ -551,7 +551,10 @@ body {
 .measure__submit,
 .measure__cancel,
 .panel__close,
-.history__edit {
+.history__edit,
+.history__delete,
+.confirm__delete,
+.confirm__cancel {
   padding: 0.3rem 0.65rem;
   font: inherit;
   font-size: 0.8125rem;
@@ -566,12 +569,16 @@ body {
 .measure__submit:hover:not(:disabled),
 .measure__cancel:hover:not(:disabled),
 .panel__close:hover,
-.history__edit:hover {
+.history__edit:hover,
+.history__delete:hover,
+.confirm__cancel:hover:not(:disabled) {
   border-color: var(--text-secondary);
 }
 
 .measure__submit:disabled,
-.measure__cancel:disabled {
+.measure__cancel:disabled,
+.confirm__delete:disabled,
+.confirm__cancel:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -638,6 +645,55 @@ body {
 
 .history__row .measure {
   width: 100%;
+}
+
+/*
+ * The delete confirm takes the place of the row's two buttons and wraps onto
+ * its own line when the prompt will not fit beside the reading. It stays
+ * inside the row on purpose: a dialog floating over the list would cover the
+ * neighbouring rows, which are the only thing telling the user they picked
+ * the right one.
+ */
+.confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.confirm:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.confirm__prompt {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* The destructive button carries the warning colour; cancel stays neutral. */
+.confirm__delete {
+  color: var(--surface-1);
+  background: var(--band-over-confluent);
+  border-color: var(--band-over-confluent);
+}
+
+.confirm__delete:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--band-over-confluent) 82%, var(--text-primary));
+}
+
+.confirm__error {
+  flex-basis: 100%;
+}
+
+@media (forced-colors: active) {
+  .confirm__delete {
+    color: ButtonText;
+    background: ButtonFace;
+    border: 1px solid ButtonText;
+  }
 }
 
 .visually-hidden {
