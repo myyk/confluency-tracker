@@ -44,6 +44,21 @@ beforeEach(() => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    if (method === 'DELETE') {
+      const status = nextResponse?.status ?? 204
+      // The server really drops it, so the refetch that follows sees a list
+      // one row shorter -- which is the half of a delete the UI has to react to.
+      if (status === 204) {
+        const id = Number(url.split('/').pop())
+        history = history.filter((row) => row.id !== id)
+      }
+      // 204 is a null-body status: handing Response a body here throws.
+      return new Response(status === 204 ? null : JSON.stringify(nextResponse?.body), {
+        status,
+        headers: status === 204 ? undefined : { 'Content-Type': 'application/json' },
+      })
+    }
+
     const response = nextResponse ?? { status: 201, body: measurement(99, 55) }
     return new Response(JSON.stringify(response.body), {
       status: response.status,
@@ -289,6 +304,202 @@ describe('WellPanel — correcting a measurement', () => {
 
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
     expect(calls.some((call) => call.method === 'PATCH')).toBe(false)
+  })
+})
+
+describe('WellPanel — deleting a measurement', () => {
+  const deletes = () => calls.filter((call) => call.method === 'DELETE')
+
+  it('asks before it deletes, naming the reading rather than just the row', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+
+    const confirm = screen.getByRole('alertdialog')
+    expect(within(confirm).getByText(/^Delete 80% from /)).toBeInTheDocument()
+    expect(deletes()).toHaveLength(0)
+  })
+
+  it('deletes the row that was confirmed, once', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[1])
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => expect(deletes()).toHaveLength(1))
+    expect(deletes()[0].url).toBe('/api/measurements/2')
+  })
+
+  it('dismisses on Cancel without calling the API', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(deletes()).toHaveLength(0)
+  })
+
+  it('dismisses on Escape without calling the API', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(deletes()).toHaveLength(0)
+  })
+
+  it('keeps one confirm open at a time', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleName(/^Delete 80%/)
+
+    // The second row's trigger is still there while the first row is confirming.
+    await user.click(screen.getByRole('button', { name: /^Delete reading 45%/ }))
+
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1)
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleName(/^Delete 45%/)
+  })
+
+  it('closes an open confirm when a row goes into edit', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    await user.click(screen.getAllByRole('button', { name: /^Edit/ })[0])
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the empty state when the last reading goes', async () => {
+    history = [measurement(1, 80)]
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getByRole('button', { name: /^Delete reading/ }))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(await screen.findByText(/No measurements recorded/)).toBeInTheDocument()
+  })
+
+  it('refetches the grid as well as the history, so a well can go back to no data', async () => {
+    const user = userEvent.setup()
+    const { invalidated } = renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => {
+      expect(invalidated).toContainEqual(['plates', PLATE_ID, 'wells'])
+      expect(invalidated).toContainEqual([
+        'plates',
+        PLATE_ID,
+        'wells',
+        WELL.id,
+        'measurements',
+      ])
+    })
+  })
+
+  it('takes a 404 as already done rather than as a failure', async () => {
+    nextResponse = { status: 404, body: { detail: 'Not found' } }
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    // The confirm closes and no error surfaces; the refetch settles the list.
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('leaves the row intact with its message when the server refuses', async () => {
+    nextResponse = { status: 500, body: { detail: 'boom' } }
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    expect(screen.getByText('80')).toBeInTheDocument()
+  })
+
+  it('disables the confirm while it is in flight, and only that row', async () => {
+    const user = userEvent.setup()
+    const gate: { release: () => void } = { release: () => {} }
+    const blocked = new Promise<void>((resolve) => {
+      gate.release = resolve
+    })
+
+    const realFetch = globalThis.fetch
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') await blocked
+      return realFetch(url, init)
+    })
+
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    const pending = await screen.findByRole('button', { name: 'Deleting…' })
+    expect(pending).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    // The rest of the list keeps working while one row is busy.
+    expect(screen.getByRole('button', { name: /^Delete reading 45%/ })).toBeEnabled()
+
+    gate.release()
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    )
+  })
+
+  it('moves focus to the row that takes its place', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getAllByRole('button', { name: /^Delete reading/ })[0])
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Delete reading 45%/ })).toHaveFocus(),
+    )
+  })
+
+  it('moves focus to the list when nothing is left to delete', async () => {
+    history = [measurement(1, 80)]
+    const user = userEvent.setup()
+    renderPanel()
+    await screen.findByText('80')
+
+    await user.click(screen.getByRole('button', { name: /^Delete reading/ }))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('list', { name: /Measurement history/ })).toHaveFocus(),
+    )
   })
 })
 

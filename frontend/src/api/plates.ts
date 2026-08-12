@@ -43,6 +43,29 @@ async function sendJson<T>(path: string, method: string, body: unknown): Promise
   return (await response.json()) as T
 }
 
+/**
+ * DELETE answers 204 with no body, so there is nothing to parse on the way out.
+ *
+ * A 404 is treated as success rather than as a failure. It means the reading
+ * was already gone -- deleted in another tab, or by someone else on the same
+ * plate -- and the user's intent is satisfied either way. Reporting it would
+ * ask them to retry for an outcome they already have; the invalidation that
+ * follows brings the list into line with what the server actually holds.
+ */
+async function sendDelete(path: string): Promise<void> {
+  const response = await fetch(path, { method: 'DELETE' })
+  if (response.status === 404) return
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new ApiError(
+      response.status,
+      `${response.status} ${response.statusText}`,
+      fieldErrorsFrom(payload),
+    )
+  }
+}
+
 export function usePlates() {
   return useQuery({
     queryKey: platesKey,
@@ -109,6 +132,22 @@ export function useCorrectMeasurement(plateId: number, wellId: number) {
       sendJson<Measurement>(`/api/measurements/${input.measurementId}`, 'PATCH', {
         value: input.value,
       }),
+    onSuccess: invalidate,
+  })
+}
+
+/**
+ * A delete moves the grid as well as the history: removing a well's only
+ * reading has to return it to the no-data treatment without a reload, which is
+ * the plate-wells key. Same three keys as the other writes, for the same
+ * reason -- last_reading_at moves too.
+ */
+export function useDeleteMeasurement(plateId: number, wellId: number) {
+  const invalidate = useInvalidateAfterWrite(plateId, wellId)
+
+  return useMutation({
+    mutationFn: (measurementId: number) =>
+      sendDelete(`/api/measurements/${measurementId}`),
     onSuccess: invalidate,
   })
 }

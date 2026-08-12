@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { absoluteTime, relativeTime } from './relativeTime'
+import { absoluteTime, readingDate, relativeTime } from './relativeTime'
 
 const NOW = new Date('2026-08-11T12:00:00Z')
 
@@ -32,6 +32,29 @@ describe('relativeTime', () => {
 
   it('degrades rather than throwing on an unparseable timestamp', () => {
     expect(relativeTime('not a date', NOW)).toBe('unknown')
+  })
+})
+
+describe('readingDate', () => {
+  // Midday UTC so the date is the same either side of most timezone offsets.
+  const noon = '2026-03-14T12:00:00Z'
+
+  it('names the day, which is what tells two readings apart', () => {
+    expect(readingDate(noon)).toMatch(/Mar/)
+    expect(readingDate(noon)).toMatch(/14/)
+  })
+
+  it('spells the month out in the long style, for an accessible name', () => {
+    expect(readingDate(noon, 'long')).toMatch(/March/)
+  })
+
+  it('leaves the time of day out of both', () => {
+    expect(readingDate(noon)).not.toMatch(/:/)
+    expect(readingDate(noon, 'long')).not.toMatch(/:/)
+  })
+
+  it('passes an unparseable value straight through', () => {
+    expect(readingDate('not a date')).toBe('not a date')
   })
 })
 
