@@ -48,9 +48,26 @@ describe('PlateGrid — sized from the plate, not hardcoded', () => {
       <PlateGrid plate={plate(8, 12)} wells={wells(8, 12, Array(96).fill(55))} />,
     )
 
+    // The column count reaches the grid template through a custom property,
+    // so the CSS owns the sizing and the component only says how many.
     const list = grid.container.querySelector('.plate') as HTMLElement
-    expect(list.style.gridTemplateColumns).toContain('repeat(12,')
+    expect(list.style.getPropertyValue('--cols')).toBe('12')
     expect(grid.container.querySelectorAll('.well')).toHaveLength(96)
+  })
+
+  it('labels every row and every column of a 96-well plate', () => {
+    const grid = render(
+      <PlateGrid plate={plate(8, 12)} wells={wells(8, 12, Array(96).fill(55))} />,
+    )
+
+    const headings = [...grid.container.querySelectorAll('.plate__heading')].map(
+      (el) => el.textContent,
+    )
+    expect(headings).toHaveLength(20)
+    expect(headings).toEqual([
+      ...['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+      ...['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
+    ])
   })
 
   it('labels the far corner of a 96-well plate H12', () => {
@@ -121,6 +138,72 @@ describe('PlateGrid — what a well shows', () => {
     const last = screen.getByLabelText(/^Well B3:/).closest('li') as HTMLElement
     expect(last.style.gridRow).toBe('3')
     expect(last.style.gridColumn).toBe('4')
+  })
+})
+
+describe('PlateGrid — density comes off the plate, not off a prop', () => {
+  const dense = () =>
+    render(<PlateGrid plate={plate(8, 12)} wells={wells(8, 12, Array(96).fill(72))} />)
+  const roomy = () => render(<PlateGrid plate={plate(1, 1)} wells={wells(1, 1, [72])} />)
+
+  it('drops the figures, the band name and the timestamp at 96 wells', () => {
+    const view = dense()
+
+    expect(view.container.querySelector('.well__value')).toBeNull()
+    expect(view.container.querySelector('.well__band')).toBeNull()
+    expect(view.container.querySelector('.well__time')).toBeNull()
+    expect(within(view.container).queryByText('72')).not.toBeInTheDocument()
+  })
+
+  it('keeps all of it at 6 wells', () => {
+    const view = roomy()
+
+    expect(view.container.querySelector('.well__value')).not.toBeNull()
+    expect(view.container.querySelector('.well__band')).not.toBeNull()
+    expect(view.container.querySelector('.well__time')).not.toBeNull()
+    expect(within(view.container).getByText('72')).toBeInTheDocument()
+  })
+
+  it('keeps the dial in both, and the target ring in neither but the roomy one', () => {
+    expect(dense().container.querySelector('.dial')).not.toBeNull()
+    expect(dense().container.querySelector('.dial__target')).toBeNull()
+
+    expect(roomy().container.querySelector('.dial')).not.toBeNull()
+    expect(roomy().container.querySelector('.dial__target')).not.toBeNull()
+  })
+
+  it('says the same thing to a screen reader either way', () => {
+    const compact = dense().container.querySelector('.well') as HTMLElement
+    const comfortable = roomy().container.querySelector('.well') as HTMLElement
+
+    // Same well address, same reading: the labels have to match word for word.
+    expect(compact.getAttribute('aria-label')).toBe(
+      'Well A1: 72% confluency, optimal, within optimal range 60 to 90, updated 2d ago',
+    )
+    expect(comfortable.getAttribute('aria-label')).toBe(
+      compact.getAttribute('aria-label'),
+    )
+  })
+
+  it('puts the figures on hover only where they are not already on screen', () => {
+    const compact = dense().container.querySelector('.well') as HTMLElement
+    const comfortable = roomy().container.querySelector('.well') as HTMLElement
+
+    expect(compact.getAttribute('title')).toBe(compact.getAttribute('aria-label'))
+    expect(comfortable).not.toHaveAttribute('title')
+  })
+
+  it('keeps a never-measured well distinct from a zero reading when compact', () => {
+    const view = render(
+      <PlateGrid
+        plate={plate(8, 12)}
+        wells={wells(8, 12, [0, null, ...Array(94).fill(50)])}
+      />,
+    )
+
+    const [zero, never] = [...view.container.querySelectorAll('.well')] as HTMLElement[]
+    expect(zero.dataset.band).toBe('very-low')
+    expect(never.dataset.band).toBe('no-data')
   })
 })
 
