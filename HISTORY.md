@@ -39,3 +39,5 @@ Next I'd maybe try containerizing the setup into a single command to set it up.
 I also regret Measurement having just value. Value should become Confluency since I think we might want to record multiple measurements in the future. I think the data migration is easy enough to just do when that happens though. SO I will fight myself and not do it now. Also if the measurements aren't taken together it might become a different fields or be modeled in a way I am not currently predicting.
 
 Depending on the usage expected by user orgs, I might make this more responsive on phone and touch screen but it feels out of scope for now.
+
+Oops, I realized that the soft deleting has an issue when deleting an edited value because the edited value isn't also deleted when soft deleting the measurement.

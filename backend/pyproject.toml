@@ -3,8 +3,10 @@ name = "backend"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "dj-database-url>=3.1.2",
     "django>=6.0.8",
     "django-ninja>=1.6.2",
+    "psycopg[binary]>=3.3.4",
 ]
 
 [dependency-groups]

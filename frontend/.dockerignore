@@ -1,0 +1,18 @@
+# Built for the host's platform and masked by an anonymous volume anyway --
+# copying it in would only slow the build down.
+node_modules/
+
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+
+*.local
+.env
+.env.*
+!.env.example
+
+.git/
+.gitignore
+Dockerfile
+.dockerignore
