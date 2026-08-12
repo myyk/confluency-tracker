@@ -30,4 +30,12 @@ Day 2: 4pm - I want to just review everything hit the mark. I immediately though
 
 I would also want to allow them to delete a measurement. It wasn't asked for but it feels missing.
 
-Also, I want to move the recordering of a measurement into the well if it doesn't feel to busy.
+Also, I want to move the recordering of a measurement into the well if it doesn't feel to busy. - though, it doesn't seem important, so I'm leaving it off again...
+
+I don't need a backend change for the 96 wells, I think, so I'll try to tack that in. I would choose something like this because smart choices on the backend made this almost free to implement there. Just a migration to add the plate. (Could have been an endpoint but built to spec.) The frontend mostly will just work too, but it will look nicer if there's some compaction that happens past a certain threshold. Given the deadlines, I would make sure it works for 96-well and not make sure it works at every size between since it's firmly crunch/personal time.
+
+Next I'd maybe try containerizing the setup into a single command to set it up.
+
+I also regret Measurement having just value. Value should become Confluency since I think we might want to record multiple measurements in the future. I think the data migration is easy enough to just do when that happens though. SO I will fight myself and not do it now. Also if the measurements aren't taken together it might become a different fields or be modeled in a way I am not currently predicting.
+
+Depending on the usage expected by user orgs, I might make this more responsive on phone and touch screen but it feels out of scope for now.

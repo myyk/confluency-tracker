@@ -7,12 +7,18 @@ interface PlatePickerProps {
   onSelect: (plateId: number) => void
 }
 
+/**
+ * The format leads, because switching plates now changes what the grid looks
+ * like: "96-well (8×12)" is the difference between a page of cards and a page
+ * of dials, and the scientist should know which they are asking for before it
+ * arrives rather than after.
+ */
 function summarise(plate: PlateListItem): string {
-  const dims = `${plate.row_count}×${plate.col_count}`
+  const format = `${plate.well_count}-well (${plate.row_count}×${plate.col_count})`
   const lastUpdated = plate.last_reading_at
     ? `updated ${relativeTime(plate.last_reading_at)}`
     : 'never measured'
-  return `${plate.name} — ${dims}, ${plate.well_count} wells, ${lastUpdated}`
+  return `${plate.name} — ${format}, ${lastUpdated}`
 }
 
 export function PlatePicker({ plates, selectedId, onSelect }: PlatePickerProps) {
